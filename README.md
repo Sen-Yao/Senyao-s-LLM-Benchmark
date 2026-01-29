@@ -1,2 +1,2 @@
-# Senyao-s-LLM-Benchmark
+# Senyao's LLM Benchmark
 个人使用的大语言模型（LLM）基准测试框架。你可以用它来创建自定义的评测任务，以评估不同模型在特定领域的表现，并对结果进行量化评分。
