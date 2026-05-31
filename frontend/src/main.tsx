@@ -17,7 +17,9 @@ type Provider = {id:number; name:string; api_base:string; api_key_saved:boolean;
 type Model = {id:number; provider_id:number; provider_name?:string; display_name:string; model_id:string; enabled:boolean};
 type Judge = {id:number; provider_id:number; provider_name?:string; name:string; model_id:string; temperature:number; enabled:boolean};
 
-type RunResult = {task_id:number; score:number|null; status:string; response:string; judge_reason:string; error:string};
+type RunProgress = {total:number; completed:number; failed:number; running:number; pending:number; percent:number; current_task:string};
+type Run = {id:number; run_id:string; model_id:number; status:string; total_score:number|null; started_at:string|null; finished_at:string|null; progress:RunProgress; failure_summary:{count:number; latest_error:string}};
+type RunResult = {task_id:number; task_slug?:string; task_title?:string; dimension?:string; score:number|null; status:string; response:string; judge_reason:string; error:string};
 
 function App(){
   const [tab,setTab]=useState('leaderboard');
@@ -47,13 +49,16 @@ function LeaderboardPage(){
 }
 
 function ModelsPage(){
-  const [models,setModels]=useState<Model[]>([]); const [judges,setJudges]=useState<Judge[]>([]); const [selected,setSelected]=useState<number|null>(null); const [results,setResults]=useState<RunResult[]>([]); const [judge,setJudge]=useState<number|''>(''); const [busy,setBusy]=useState('');
-  const load=()=>{api('/models').then(setModels); api('/judges').then(setJudges)}; useEffect(load,[]);
-  const loadRuns=async(m:Model)=>{setSelected(m.id); const runs=await api('/runs'); const run=runs.find((x:any)=>x.model_id===m.id); setResults(run? await api(`/runs/${run.run_id}/results`):[])};
-  const runSelected=async()=>{if(!selected)return; setBusy('已加入运行队列'); await api('/runs',{method:'POST',body:JSON.stringify({model_ids:[selected],judge_profile_id:judge||null})});};
-  return <section><Header title="模型审计" sub="单模型运行、最近结果审计、prompt/response/judge reason 渐进式披露。" action={<div className="inline"><select value={judge} onChange={e=>setJudge(e.target.value?Number(e.target.value):'')}><option value="">不使用裁判/仅确定性题</option>{judges.map(j=><option key={j.id} value={j.id}>{j.name}</option>)}</select><button onClick={runSelected} disabled={!selected}><Play size={16}/>运行选中模型</button></div>}/>
-    {busy&&<p className="notice">{busy}</p>}<div className="split"><div className="list">{models.map(m=><button className={selected===m.id?'row on':'row'} onClick={()=>loadRuns(m)} key={m.id}>{m.display_name}<small>{m.provider_name} · {m.model_id}</small></button>)}</div>
-    <div className="panel grow">{results.length?results.map((r,i)=><details key={i} className="audit"><summary>题目 #{r.task_id} · {r.status} · 分数 {r.score??'—'}</summary><h4>裁判理由</h4><p>{r.judge_reason||'—'}</p><h4>模型回答</h4><pre>{r.response||r.error||'—'}</pre></details>):<p className="muted">选择模型查看最近一次运行详情。若无结果，可点击右上角运行。</p>}</div></div>
+  const [models,setModels]=useState<Model[]>([]); const [judges,setJudges]=useState<Judge[]>([]); const [selected,setSelected]=useState<number|null>(null); const [runs,setRuns]=useState<Run[]>([]); const [activeRun,setActiveRun]=useState<Run|null>(null); const [results,setResults]=useState<RunResult[]>([]); const [judge,setJudge]=useState<number|''>(''); const [busy,setBusy]=useState(''); const [failedOnly,setFailedOnly]=useState(false);
+  const load=()=>{api('/models').then(setModels); api('/judges').then(setJudges); api('/runs').then(setRuns)}; useEffect(load,[]);
+  const loadRuns=async(m:Model)=>{setSelected(m.id); const allRuns:Run[]=await api('/runs'); setRuns(allRuns); const run=allRuns.find(x=>x.model_id===m.id)||null; setActiveRun(run); setResults(run? await api(`/runs/${run.run_id}/results`):[])};
+  const refreshActive=async()=>{if(!selected)return; const m=models.find(x=>x.id===selected); if(m) await loadRuns(m)};
+  const runSelected=async()=>{if(!selected)return; setBusy('已加入运行队列'); await api('/runs',{method:'POST',body:JSON.stringify({model_ids:[selected],judge_profile_id:judge||null})}); await refreshActive();};
+  const visibleResults=failedOnly?results.filter(r=>r.status==='failed'):results;
+  return <section><Header title="模型审计" sub="单模型运行、进度可观测、失败结果过滤、prompt/response/judge reason 渐进式披露。" action={<div className="inline"><select value={judge} onChange={e=>setJudge(e.target.value?Number(e.target.value):'')}><option value="">不使用裁判/仅确定性题</option>{judges.map(j=><option key={j.id} value={j.id}>{j.name}</option>)}</select><button onClick={refreshActive} disabled={!selected}><RefreshCw size={16}/>刷新运行</button><button onClick={runSelected} disabled={!selected}><Play size={16}/>运行选中模型</button></div>}/>
+    {busy&&<p className="notice">{busy}</p>}<div className="split"><div className="list">{models.map(m=>{const run=runs.find(x=>x.model_id===m.id); return <button className={selected===m.id?'row on':'row'} onClick={()=>loadRuns(m)} key={m.id}>{m.display_name}<small>{m.provider_name} · {m.model_id}</small>{run&&<small>{run.status} · {run.progress.percent}% · 失败 {run.failure_summary.count}</small>}</button>})}</div>
+    <div className="panel grow">{activeRun&&<div className="run-card"><div><b>最近运行 {activeRun.run_id}</b><small>{activeRun.status} · {activeRun.progress.completed}/{activeRun.progress.total} 成功 · failed {activeRun.progress.failed} · running {activeRun.progress.running}</small></div><div className="bar"><span style={{width:`${activeRun.progress.percent}%`}} /></div><small>当前题目：{activeRun.progress.current_task||'—'}；最近错误：{activeRun.failure_summary.latest_error||'—'}</small><label><input type="checkbox" checked={failedOnly} onChange={e=>setFailedOnly(e.target.checked)}/> 只看失败结果</label></div>}
+    {visibleResults.length?visibleResults.map((r,i)=><details key={i} className="audit"><summary>{r.task_slug||`题目 #${r.task_id}`} · {r.status} · 分数 {r.score??'—'}</summary><h4>裁判理由</h4><p>{r.judge_reason||'—'}</p><h4>模型回答 / 错误</h4><pre>{r.response||r.error||'—'}</pre></details>):<p className="muted">选择模型查看最近一次运行详情。若无结果，可点击右上角运行。</p>}</div></div>
   </section>;
 }
 
