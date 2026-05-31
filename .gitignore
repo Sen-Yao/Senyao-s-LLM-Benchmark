@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Runtime data
+/data/
+/config/.env
+*.db
+*.sqlite
+
+# Env
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+__MACOSX/
+
+# TypeScript
+*.tsbuildinfo

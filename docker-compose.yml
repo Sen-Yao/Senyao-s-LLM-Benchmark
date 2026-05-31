@@ -1,0 +1,12 @@
+services:
+  senyao-llm-benchmark:
+    build: .
+    container_name: senyao-llm-benchmark
+    ports:
+      - "18087:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./tasks:/app/tasks:ro
+    restart: unless-stopped

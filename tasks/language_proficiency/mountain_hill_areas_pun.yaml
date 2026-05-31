@@ -1,0 +1,31 @@
+id: mountain_hill_areas_pun
+name: "Mountain Pun: 'Hill Areas' Phonetic Linguistic Test"
+description: "测试模型对英语谐音双关（Pun）的识别能力。模型需识别出 'hill areas' 与 'hilarious' 的发音相近性，并理解其如何构成幽默闭环。"
+type: "llm_judged"
+
+prompt_template: |
+  请极简解析冷笑话中的逻辑：「Mountains aren't just funny, they're hill areas.」
+
+  **限制**：直接回答核心点，严禁解释背景信息，总字数控制在 60 字以内。
+
+evaluation:
+  method: "llm_eval"
+  standard: |
+    核心逻辑点：
+    1. 谐音识别：明确指出“hill areas”谐音单词“hilarious”（极其好笑的）。
+    2. 语义闭环：解释单词“hilarious”是对前文“funny”（有趣）的程度递进，同时“hill areas”字面义又符合“Mountains”（山脉）的特征。
+
+    评分细则：
+    1. 【完美回答】（100分）：
+       - 准确识别出谐音词“hilarious”。
+       - 简洁说明了“山脉多山丘地带（hill areas）”字面义与“极其好笑（hilarious）”双关义的重叠。
+       - 篇幅极短，无废话。
+
+    2. 【仅识别谐音】（70分）：
+       - 识别出了“hilarious”，但没有解释清楚字面意思和山脉的关系，或者解释过于冗长。
+
+    3. 【字面误读】（30分）：
+       - 仅仅从地理角度解释山脉为什么有 hill areas，认为是在描述地形，完全没意识到这是一个谐音梗。
+
+    4. 【完全错误】（0分）：
+       - 产生幻觉，或者给出了完全不相关的单词映射。

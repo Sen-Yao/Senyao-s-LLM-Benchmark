@@ -1,0 +1,32 @@
+id: radio_band_classify
+name: "Radio Band Classification"
+description: >
+  Tests the model's ability to classify radio bands based on given frequency ranges and types. 
+  此题一方面考察模型对无线电法规的知识储备；另一方面，考察模型是否会将「在 VHF 和 UHF 范围内作为主要业务的频率」
+  误理解成「在 VHF 和 UHF 范围内分别作为主要业务的频率」
+type: "multiple_choice"
+
+# 使用 | 保留换行格式，确保 Prompt 送给模型时排版整齐
+prompt_template: |
+  中国大陆在 VHF 和 UHF 范围内分配给业余业务和卫星业余业务与其他业务共用并设业务类别为主要业务与次要业务，以下那些频率分配给业余业务和卫星业余业务与其他业务共用并且业余业务和卫星业余业务作为主要业务：
+  A: 50MHz、144MHz
+  B: 144MHz、430MHz
+  C: 220MHz、430MHz
+  D: 50MHz、430MHz
+
+  请直接回答对应的字母选项，不要包含任何其他内容。
+
+evaluation:
+  method: "exact_match"
+  # 映射表：将模型回答（归一化后）映射到得分和理由
+  mapping:
+    "a":
+      score: 100
+      reason: "正确理解题意并回答: 选项 A (50MHz、144MHz) 是正确的业余业务和卫星业余业务频率范围。且模型没有误认为题意是「在 VHF 和 UHF 范围内分别作为主要业务的频率」，而是理解为「在 VHF 和 UHF 范围内作为主要业务的频率」。"
+    "b":
+      score: 20
+      reason: "430 MHz 不是业余业务和卫星业余业务的主要频率范围。若回答此项，说明模型可能误认为题意是「在 VHF 和 UHF 范围内分别作为主要业务的频率」"
+  
+  # 用于处理 c, d 或其他无关回答
+  default_score: 0
+  default_reason: "完全不相关的回答"
