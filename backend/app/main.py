@@ -11,6 +11,7 @@ from .api.judges import router as judges_router
 from .api.tasks import router as tasks_router
 from .api.leaderboard import router as leaderboard_router
 from .api.runs import router as runs_router
+from .api.smoke import router as smoke_router
 
 settings=get_settings()
 app=FastAPI(title=settings.app_name)
@@ -24,7 +25,7 @@ def startup():
 def health():
     return {"ok": True, "app": settings.app_name}
 
-for router in [providers_router, models_router, judges_router, tasks_router, leaderboard_router, runs_router]:
+for router in [providers_router, models_router, judges_router, tasks_router, leaderboard_router, runs_router, smoke_router]:
     app.include_router(router, prefix="/api")
 
 frontend_dist=Path("frontend/dist")
