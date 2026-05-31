@@ -11,7 +11,8 @@ const api = async (path: string, init?: RequestInit) => {
 };
 
 type Leaderboard = { dimensions: string[]; rows: Array<{model_id:number; model:string; provider:string; overall:number|null; dimensions:Record<string,number|null>; coverage:{current:number; total:number; status:string}}> };
-type Task = {id:number; slug:string; title:string; category:string; dimension:string; evaluator_type:string; content_hash:string; active:boolean; covered_models:number; total_models:number};
+type TaskChange = {id:number; task_slug:string; change_type:string; old_hash:string; new_hash:string; requires_rerun:boolean; created_at:string};
+type Task = {id:number; slug:string; title:string; category:string; dimension:string; evaluator_type:string; content_hash:string; active:boolean; covered_models:number; stale_models:number; pending_models:number; total_models:number; latest_change?:TaskChange|null};
 type Provider = {id:number; name:string; api_base:string; api_key_saved:boolean; api_key_fingerprint:string; enabled:boolean; notes:string};
 type Model = {id:number; provider_id:number; provider_name?:string; display_name:string; model_id:string; enabled:boolean};
 type Judge = {id:number; provider_id:number; provider_name?:string; name:string; model_id:string; temperature:number; enabled:boolean};
@@ -57,13 +58,16 @@ function ModelsPage(){
 }
 
 function TasksPage(){
-  const [tasks,setTasks]=useState<Task[]>([]); const [models,setModels]=useState<Model[]>([]); const [selectedModels,setSelectedModels]=useState<number[]>([]); const load=()=>{api('/tasks').then(setTasks); api('/models').then(setModels)};
+  const [tasks,setTasks]=useState<Task[]>([]); const [changes,setChanges]=useState<TaskChange[]>([]); const [models,setModels]=useState<Model[]>([]); const [selectedModels,setSelectedModels]=useState<number[]>([]); const [onlyChanged,setOnlyChanged]=useState(false);
+  const load=()=>{api('/tasks').then(setTasks); api('/tasks/changes').then(setChanges); api('/models').then(setModels)};
   useEffect(()=>{load()},[]);
   const sync=async()=>{await api('/tasks/sync',{method:'POST'}); load()};
   const rerun=async(slug:string)=>{await api(`/runs/incremental/task/${slug}`,{method:'POST',body:JSON.stringify({model_ids:selectedModels})}); alert('已加入增量重跑队列：'+slug)};
-  return <section><Header title="题库" sub="YAML 维护；hash 变化后按题触发已有模型增量重跑。" action={<button onClick={sync}>同步题库</button>}/>
-  <div className="toolbar"><span>选择用于增量重跑的模型：</span>{models.map(m=><label key={m.id}><input type="checkbox" checked={selectedModels.includes(m.id)} onChange={e=>setSelectedModels(e.target.checked?[...selectedModels,m.id]:selectedModels.filter(x=>x!==m.id))}/> {m.display_name}</label>)}</div>
-  <div className="matrix"><table><thead><tr><th>ID</th><th>标题</th><th>维度</th><th>评估</th><th>Hash</th><th>覆盖</th><th>操作</th></tr></thead><tbody>{tasks.map(t=><tr key={t.slug}><td>{t.slug}</td><td>{t.title}</td><td>{t.dimension}</td><td>{t.evaluator_type}</td><td><code>{t.content_hash.slice(0,10)}</code></td><td>{t.covered_models}/{t.total_models}</td><td><button disabled={!selectedModels.length} onClick={()=>rerun(t.slug)}>补跑此题</button></td></tr>)}</tbody></table></div></section>;
+  const visible=tasks.filter(t=>!onlyChanged || t.stale_models>0 || t.latest_change?.requires_rerun);
+  return <section><Header title="题库" sub="YAML 维护；hash 变化后暴露 stale 覆盖，并可按题触发已有模型增量重跑。" action={<button onClick={sync}>同步题库</button>}/>
+  <div className="toolbar"><label><input type="checkbox" checked={onlyChanged} onChange={e=>setOnlyChanged(e.target.checked)}/> 只看变更/待重跑</label><span>选择用于增量重跑的模型：</span>{models.map(m=><label key={m.id}><input type="checkbox" checked={selectedModels.includes(m.id)} onChange={e=>setSelectedModels(e.target.checked?[...selectedModels,m.id]:selectedModels.filter(x=>x!==m.id))}/> {m.display_name}</label>)}</div>
+  <div className="matrix"><table><thead><tr><th>ID</th><th>标题</th><th>维度</th><th>评估</th><th>Hash</th><th>覆盖</th><th>状态</th><th>操作</th></tr></thead><tbody>{visible.map(t=><tr key={t.slug}><td>{t.slug}</td><td>{t.title}</td><td>{t.dimension}</td><td>{t.evaluator_type}</td><td><code>{t.content_hash.slice(0,10)}</code></td><td>fresh {t.covered_models}/{t.total_models} · stale {t.stale_models}</td><td>{t.latest_change?<span className={t.latest_change.requires_rerun?'pill warn':'pill ok'}>{t.latest_change.change_type}</span>:<span className="pill ok">stable</span>}</td><td><button disabled={!selectedModels.length} onClick={()=>rerun(t.slug)}>补跑此题</button></td></tr>)}</tbody></table></div>
+  <div className="panel"><h3>最近题库变更</h3>{changes.length?changes.slice(0,8).map(c=><div className="provider" key={c.id}><b>{c.task_slug}</b><small>{c.change_type} · rerun={String(c.requires_rerun)}</small><code>{(c.old_hash||'—').slice(0,10)} → {(c.new_hash||'—').slice(0,10)}</code></div>):<p className="muted">暂无变更事件。</p>}</div></section>;
 }
 
 function SettingsPage(){
