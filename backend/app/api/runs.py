@@ -18,7 +18,19 @@ async def _run_many(payload: RunRequest):
 @router.post("")
 def create_run(payload: RunRequest, background: BackgroundTasks):
     background.add_task(_run_many, payload)
-    return {"status": "queued", "model_ids": payload.model_ids}
+    return {"status": "queued", "model_ids": payload.model_ids, "task_slugs": payload.task_slugs}
+
+
+@router.post("/incremental/task/{task_slug}")
+def rerun_task_for_models(task_slug: str, payload: RunRequest, background: BackgroundTasks):
+    scoped = RunRequest(
+        model_ids=payload.model_ids,
+        suite=payload.suite,
+        task_slugs=[task_slug],
+        judge_profile_id=payload.judge_profile_id,
+    )
+    background.add_task(_run_many, scoped)
+    return {"status": "queued", "task_slug": task_slug, "model_ids": payload.model_ids}
 
 @router.get("")
 def list_runs(session: Session = Depends(get_session)):

@@ -52,3 +52,27 @@ class RunRequest(BaseModel):
     suite: str = "all"
     task_slugs: list[str] | None = None
     judge_profile_id: int | None = None
+
+
+class ModelPatch(BaseModel):
+    provider_id: int | None = None
+    display_name: str | None = None
+    model_id: str | None = None
+    enabled: bool | None = None
+    context_window: int | None = None
+    input_price: float | None = None
+    output_price: float | None = None
+    notes: str | None = None
+
+
+class JudgeProfilePatch(BaseModel):
+    provider_id: int | None = None
+    name: str | None = None
+    model_id: str | None = None
+    temperature: float | None = None
+    enabled: bool | None = None
+    prompt_template: str | None = None
+
+
+class ProviderTestRequest(BaseModel):
+    model_id: str | None = None
