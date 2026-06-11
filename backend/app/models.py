@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .db import Base
 
@@ -7,6 +7,12 @@ from .db import Base
 class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AppSetting(TimestampMixin, Base):
+    __tablename__ = "app_settings"
+    key: Mapped[str] = mapped_column(String(120), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, default="")
 
 
 class Provider(TimestampMixin, Base):
@@ -32,6 +38,7 @@ class LLMModel(TimestampMixin, Base):
     input_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     output_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     notes: Mapped[str] = mapped_column(Text, default="")
+    tool_protocol: Mapped[str] = mapped_column(String(40), default="openai_function")
     provider: Mapped[Provider] = relationship(back_populates="models")
 
 
@@ -53,11 +60,17 @@ class Task(TimestampMixin, Base):
     title: Mapped[str] = mapped_column(String(240))
     category: Mapped[str] = mapped_column(String(120), index=True)
     dimension: Mapped[str] = mapped_column(String(120), index=True)
+    task_type: Mapped[str] = mapped_column(String(80), default="llm_judged", index=True)
     description: Mapped[str] = mapped_column(Text, default="")
+    short_description: Mapped[str] = mapped_column(Text, default="")
     prompt: Mapped[str] = mapped_column(Text)
     evaluator_type: Mapped[str] = mapped_column(String(80), index=True)
     evaluator_config_json: Mapped[str] = mapped_column(Text, default="{}")
+    config_json: Mapped[str] = mapped_column(Text, default="{}")
     content_hash: Mapped[str] = mapped_column(String(64), index=True)
+    semantic_hash: Mapped[str] = mapped_column(String(64), default="", index=True)
+    raw_config_hash: Mapped[str] = mapped_column(String(64), default="", index=True)
+    evaluator_version: Mapped[str] = mapped_column(String(40), default="v1", index=True)
     source_path: Mapped[str] = mapped_column(String(500), default="")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -93,23 +106,30 @@ class BenchmarkRun(TimestampMixin, Base):
 
 class TaskResult(TimestampMixin, Base):
     __tablename__ = "task_results"
-    __table_args__ = (UniqueConstraint("model_id", "task_id", "task_hash", name="uq_model_task_hash"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     run_id: Mapped[str] = mapped_column(String(80), index=True)
     model_id: Mapped[int] = mapped_column(ForeignKey("llm_models.id"), index=True)
     task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), index=True)
     task_hash: Mapped[str] = mapped_column(String(64), index=True)
+    semantic_hash: Mapped[str] = mapped_column(String(64), default="", index=True)
+    evaluator_version: Mapped[str] = mapped_column(String(40), default="v1", index=True)
     prompt: Mapped[str] = mapped_column(Text)
     response: Mapped[str] = mapped_column(Text, default="")
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
     judge_reason: Mapped[str] = mapped_column(Text, default="")
     raw_judge_response: Mapped[str] = mapped_column(Text, default="")
     latency: Mapped[float | None] = mapped_column(Float, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cost: Mapped[float | None] = mapped_column(Float, nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    max_retries: Mapped[int] = mapped_column(Integer, default=3)
     status: Mapped[str] = mapped_column(String(40), default="pending")
     error: Mapped[str] = mapped_column(Text, default="")
+    trace_json: Mapped[str] = mapped_column(Text, default="{}")
+    tool_metrics_json: Mapped[str] = mapped_column(Text, default="{}")
 
 
 class TaskChangeEvent(TimestampMixin, Base):

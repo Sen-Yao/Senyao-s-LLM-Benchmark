@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ProviderIn(BaseModel):
@@ -36,6 +36,14 @@ class ModelIn(BaseModel):
     input_price: float | None = None
     output_price: float | None = None
     notes: str = ""
+    tool_protocol: str = "openai_function"
+
+    @field_validator("tool_protocol")
+    @classmethod
+    def tool_protocol_must_be_known(cls, value: str) -> str:
+        if value not in {"openai_function", "anthropic_tool"}:
+            raise ValueError("tool_protocol must be openai_function or anthropic_tool")
+        return value
 
 
 class JudgeProfileIn(BaseModel):
@@ -52,6 +60,24 @@ class RunRequest(BaseModel):
     suite: str = "all"
     task_slugs: list[str] | None = None
     judge_profile_id: int | None = None
+    max_concurrency: int = Field(default=1, ge=1, le=16)
+    max_retries: int = Field(default=3, ge=0, le=10)
+    force_rerun: bool = False
+
+    @field_validator("model_ids")
+    @classmethod
+    def model_ids_must_not_be_empty(cls, value: list[int]) -> list[int]:
+        if not value:
+            raise ValueError("至少选择一个模型")
+        return value
+
+
+class TaskRerunRequest(BaseModel):
+    model_ids: list[int] | None = None
+    suite: str = "all"
+    judge_profile_id: int | None = None
+    max_concurrency: int = Field(default=1, ge=1, le=16)
+    max_retries: int = Field(default=3, ge=0, le=10)
 
 
 class ModelPatch(BaseModel):
@@ -63,6 +89,14 @@ class ModelPatch(BaseModel):
     input_price: float | None = None
     output_price: float | None = None
     notes: str | None = None
+    tool_protocol: str | None = None
+
+    @field_validator("tool_protocol")
+    @classmethod
+    def tool_protocol_must_be_known(cls, value: str | None) -> str | None:
+        if value is not None and value not in {"openai_function", "anthropic_tool"}:
+            raise ValueError("tool_protocol must be openai_function or anthropic_tool")
+        return value
 
 
 class JudgeProfilePatch(BaseModel):
@@ -76,3 +110,7 @@ class JudgeProfilePatch(BaseModel):
 
 class ProviderTestRequest(BaseModel):
     model_id: str | None = None
+
+
+class AppSettingsPatch(BaseModel):
+    default_judge_profile_id: int | None = None

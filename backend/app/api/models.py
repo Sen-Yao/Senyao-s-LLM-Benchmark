@@ -19,6 +19,7 @@ def out(m: LLMModel, provider: Provider | None = None) -> dict:
         "input_price": m.input_price,
         "output_price": m.output_price,
         "notes": m.notes,
+        "tool_protocol": m.tool_protocol,
     }
 
 

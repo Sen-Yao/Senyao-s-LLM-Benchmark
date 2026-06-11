@@ -30,3 +30,19 @@ docker compose up -d --build
 ```
 
 SQLite 数据位于 `./data/benchmark.db`，题库挂载为 `./tasks:/app/tasks`。
+
+
+## 图标与 Docker UI
+
+Web 页签、侧栏品牌标识与 Web Manifest 使用 `frontend/public/benchmark-logo.svg`。
+该 SVG 基于 Tabler Icons 的 gauge 图形语言二次定制；Tabler Icons 为 MIT License，Copyright (c) 2020-2026 Paweł Kuna。迁移到 Yggdrasil / Docker UI 时，可直接使用同一个 SVG 作为应用图标：
+
+```text
+/app/frontend/dist/benchmark-logo.svg
+```
+
+若 Docker UI 需要外部 URL，部署后使用：
+
+```text
+https://<your-domain>/benchmark-logo.svg
+```

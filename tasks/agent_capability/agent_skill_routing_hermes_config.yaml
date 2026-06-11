@@ -1,0 +1,183 @@
+id: agent_skill_routing_hermes_config
+name: Hermes 配置问题的 Agent 状态机检测
+short_description: 测试模型能否在 Hermes Agent 配置问题中真实调用 hermes-agent skill，并在正确状态终点完成。
+description: |
+  该任务用于 agent_capability 维度的状态机 V1 闭环：单轮入口、多步 tool loop、fixture-backed skill_view、状态机评分。
+dimension: agent_capability
+type: agent_tool
+
+prompt_template: |
+  用户问：如何配置 Hermes Agent 的 OpenAI-compatible custom provider？
+  请根据可用工具和系统规则完成回答。
+
+agent:
+  mode: routed_agent
+  enabled_toolsets:
+    - skills
+  max_turns: 4
+  max_tool_calls: 2
+  max_tool_result_chars: 8000
+  observation_policy:
+    skill_view:
+      mode: full
+      max_chars_to_model: 8000
+
+fixtures:
+  skills:
+    hermes-agent:
+      content: |
+        # Hermes Agent
+
+        Hermes Agent 自身配置问题必须先查阅 hermes-agent skill。
+
+        常用配置方式：
+        - 使用 `hermes config set providers.custom.<name>.api_base <url>` 配置 OpenAI-compatible endpoint。
+        - 使用 `hermes config set providers.custom.<name>.api_key <key>` 配置 API key。
+        - 使用 `hermes config set model.provider custom:<name>` 切换到该 provider。
+        - 使用 `hermes config set model.model <model-id>` 设置模型。
+        - 修改配置后可用 `hermes config get` 或一次简单对话 smoke test 验证。
+      linked_files: {}
+
+expected_trace:
+  required_tool_calls:
+    - tool_name: skill_view
+      arguments:
+        name: hermes-agent
+  forbidden_tool_calls: []
+  max_tool_calls: 2
+  max_irrelevant_tool_calls: 0
+
+state_machine:
+  initial: start
+  allowed_skills:
+    - hermes-agent
+  facts:
+    loaded_hermes_agent:
+      tool_call:
+        name: skill_view
+        arguments:
+          name: hermes-agent
+    answer_has_config_command:
+      final_answer_contains:
+        - hermes config set
+    answer_has_api_base_command:
+      final_answer_contains:
+        - providers.custom.
+        - .api_base
+    answer_has_api_key_command:
+      final_answer_contains:
+        - providers.custom.
+        - .api_key
+    answer_has_provider_switch:
+      final_answer_contains:
+        - model.provider
+        - "custom:"
+    answer_has_model_selection:
+      final_answer_contains:
+        - model.model
+    answer_has_smoke_verification:
+      any:
+        - final_answer_contains:
+            - hermes config get
+        - final_answer_contains:
+            - smoke test
+        - final_answer_contains:
+            - 验证
+    answer_has_complete_custom_provider_config:
+      final_answer_contains:
+        - hermes config set
+        - providers.custom.
+        - .api_base
+        - .api_key
+        - model.provider
+        - "custom:"
+        - model.model
+  states:
+    start:
+      transitions:
+        - to: loaded_required_skill
+          when: loaded_hermes_agent
+        - to: wrong_skill_pruned
+          when:
+            forbidden_or_irrelevant_skill: true
+          terminal: true
+          score: 25
+          reason: 加载了与 Hermes 配置无关的 skill，且没有恢复到 hermes-agent，直接剪枝。
+        - to: no_skill_but_correctish
+          when:
+            all:
+              - answer_has_complete_custom_provider_config
+              - tool_budget_ok
+          terminal: true
+          score: 45
+          reason: 未按规则加载 hermes-agent skill，但最终答案覆盖了 custom provider 的主要配置命令。
+        - to: no_skill_partial
+          when:
+            all:
+              - answer_has_config_command
+              - tool_budget_ok
+          terminal: true
+          score: 35
+          reason: 未按规则加载 hermes-agent skill，只凭常识给出部分 hermes config set 答案。
+    loaded_required_skill:
+      transitions:
+        - to: success_full
+          when:
+            all:
+              - answer_has_complete_custom_provider_config
+              - answer_has_smoke_verification
+              - tool_budget_ok
+          terminal: true
+          score: 100
+          reason: 已加载 hermes-agent skill，完整给出 api_base/api_key/provider/model 配置命令，并包含验证步骤。
+        - to: success_complete_no_verify
+          when:
+            all:
+              - answer_has_complete_custom_provider_config
+              - tool_budget_ok
+          terminal: true
+          score: 92
+          reason: 已加载 hermes-agent skill，并完整给出 custom provider 配置命令；但缺少明确验证步骤。
+        - to: recovered_success
+          when:
+            all:
+              - recovered_from_irrelevant_skill_call
+              - answer_has_complete_custom_provider_config
+              - tool_budget_ok
+          terminal: true
+          score: 85
+          reason: 曾误查无关 skill，但随后恢复到 hermes-agent 并给出完整配置命令。
+        - to: success_minimal
+          when:
+            all:
+              - answer_has_config_command
+              - answer_has_provider_switch
+              - tool_budget_ok
+          terminal: true
+          score: 78
+          reason: 已加载 hermes-agent skill，并给出关键配置方向；但 api_base/api_key/model 细节不完整。
+        - to: skill_loaded_incomplete
+          when:
+            all:
+              - answer_has_config_command
+              - tool_budget_ok
+          terminal: true
+          score: 65
+          reason: 已加载必要 skill，但答案只泛泛提到 hermes config set，缺少 custom provider 关键配置项。
+        - to: premature_done
+          when: assistant_done
+          terminal: true
+          score: 55
+          reason: 已加载必要 skill，但最终答案缺少关键配置命令，属于中间态提前完成。
+      default_terminal_state: stalled_after_skill
+      default_score: 45
+      default_reason: 已加载必要 skill，但没有进入可评分完成态。
+
+evaluation:
+  method: agent_state_machine_eval
+  rubric:
+    task_completion: 40
+    state_progress: 30
+    evidence_use: 15
+    budget: 10
+    clarity: 5

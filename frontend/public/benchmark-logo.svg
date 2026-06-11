@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Senyao's LLM Benchmark logo</title>
+  <desc id="desc">Benchmark gauge with checklist ticks, derived from the MIT licensed Tabler Icons gauge motif.</desc>
+  <!-- Source motif: Tabler Icons gauge, MIT License, Copyright (c) 2020-2026 Paweł Kuna. Customized for Senyao's LLM Benchmark. -->
+  <rect x="5" y="5" width="54" height="54" fill="#d8b65b" stroke="#1d241b" stroke-width="4"/>
+  <path d="M17 43a18 18 0 1 1 30 0" stroke="#1d241b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M32 43l10-15" stroke="#8f2e25" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="32" cy="43" r="3" fill="#1d241b"/>
+  <path d="M17 25l4 4 7-9" stroke="#1d241b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M40 21h8M40 29h6" stroke="#1d241b" stroke-width="3" stroke-linecap="round"/>
+</svg>

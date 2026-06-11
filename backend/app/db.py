@@ -1,6 +1,7 @@
 from collections.abc import Generator
 from pathlib import Path
 from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, Session
 from .config import get_settings
 
@@ -19,7 +20,11 @@ if settings.database_url.startswith("sqlite"):
     if db_path and not db_path.startswith(":memory:"):
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
-engine = create_engine(settings.database_url, connect_args=_sqlite_connect_args(settings.database_url))
+engine_kwargs = {"connect_args": _sqlite_connect_args(settings.database_url)}
+if settings.database_url == "sqlite:///:memory:":
+    engine_kwargs["poolclass"] = StaticPool
+
+engine = create_engine(settings.database_url, **engine_kwargs)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
