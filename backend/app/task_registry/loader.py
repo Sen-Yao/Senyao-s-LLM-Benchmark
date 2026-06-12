@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 from pathlib import Path
 from typing import Any
 import yaml
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session
 from backend.app.models import Task, TaskChangeEvent
 
 
+logger = logging.getLogger(__name__)
 SEMANTIC_IGNORED_EVALUATION_KEYS = {"method", "evaluator_version", "schema_version", "metadata"}
 
 
@@ -37,14 +39,18 @@ def stable_task_hash(payload: dict[str, Any]) -> str:
         "agent": payload.get("agent"),
         "tools": payload.get("tools"),
         "fixtures": payload.get("fixtures"),
-        "allowed_actions": payload.get("allowed_actions"),
-        "required_checkpoints": payload.get("required_checkpoints"),
-        "forbidden_actions": payload.get("forbidden_actions"),
-        "command_policy": payload.get("command_policy"),
-        "budget": payload.get("budget"),
         "expected_trace": payload.get("expected_trace"),
         "evaluation": _semantic_evaluation(evaluation),
     }
+    for key in [
+        "allowed_actions",
+        "required_checkpoints",
+        "forbidden_actions",
+        "command_policy",
+        "budget",
+    ]:
+        if key in payload and payload[key] is not None:
+            relevant[key] = payload[key]
     if payload.get("state_machine") is not None:
         relevant["state_machine"] = payload.get("state_machine")
     return _canonical_json_hash(relevant)
@@ -57,6 +63,8 @@ def evaluator_version(payload: dict[str, Any]) -> str:
 
 def load_yaml_task(path: Path, base_dir: Path) -> dict[str, Any]:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"task yaml root must be a mapping: {path}")
     rel = path.relative_to(base_dir)
     category = rel.parts[0] if len(rel.parts) > 1 else "unclassified"
     evaluation = raw.get("evaluation") or {}
@@ -89,7 +97,11 @@ def sync_tasks_from_dir(session: Session, tasks_dir: Path) -> dict[str, int]:
     stats = {"created": 0, "updated": 0, "unchanged": 0, "deactivated": 0}
     seen: set[str] = set()
     for path in sorted(tasks_dir.rglob("*.yaml")):
-        data = load_yaml_task(path, tasks_dir)
+        try:
+            data = load_yaml_task(path, tasks_dir)
+        except ValueError as exc:
+            logger.warning("Skipping invalid task file: %s", exc)
+            continue
         seen.add(data["slug"])
         task = session.query(Task).filter(Task.slug == data["slug"]).one_or_none()
         if task is None:

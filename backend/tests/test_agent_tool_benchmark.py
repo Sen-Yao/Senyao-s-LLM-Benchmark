@@ -267,6 +267,29 @@ def test_task_hash_ignores_missing_state_machine_for_non_agent_tasks():
     assert with_absent == with_null
 
 
+def test_task_hash_ignores_missing_agent_only_fields_for_non_agent_tasks():
+    payload = {
+        "id": "plain_task",
+        "dimension": "reasoning",
+        "type": "llm_judged",
+        "prompt_template": "回答 yes",
+        "evaluation": {"method": "contains", "contains": "yes"},
+    }
+    baseline = stable_task_hash(payload)
+    with_absent_optional_fields = stable_task_hash(
+        {
+            **payload,
+            "allowed_actions": None,
+            "required_checkpoints": None,
+            "forbidden_actions": None,
+            "command_policy": None,
+            "budget": None,
+        }
+    )
+
+    assert baseline == with_absent_optional_fields
+
+
 def test_agent_task_runs_multi_step_tool_loop_and_persists_trace(monkeypatch):
     calls = []
 

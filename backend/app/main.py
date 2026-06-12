@@ -29,22 +29,23 @@ def probe_enabled() -> bool:
     return os.getenv("BENCHMARK_PROBE", "").lower() in {"1", "true", "yes", "on"}
 
 
-@app.middleware("http")
-async def probe_api_latency(request: Request, call_next):
-    if not probe_enabled() or not request.url.path.startswith("/api"):
-        return await call_next(request)
-    start = time.perf_counter()
-    response = await call_next(request)
-    elapsed_ms = (time.perf_counter() - start) * 1000
-    response.headers["X-Probe-Duration-Ms"] = f"{elapsed_ms:.1f}"
-    probe_logger.warning(
-        "[probe] api method=%s path=%s status=%s total_ms=%.1f",
-        request.method,
-        request.url.path,
-        response.status_code,
-        elapsed_ms,
-    )
-    return response
+if probe_enabled():
+    @app.middleware("http")
+    async def probe_api_latency(request: Request, call_next):
+        if not request.url.path.startswith("/api"):
+            return await call_next(request)
+        start = time.perf_counter()
+        response = await call_next(request)
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        response.headers["X-Probe-Duration-Ms"] = f"{elapsed_ms:.1f}"
+        probe_logger.warning(
+            "[probe] api method=%s path=%s status=%s total_ms=%.1f",
+            request.method,
+            request.url.path,
+            response.status_code,
+            elapsed_ms,
+        )
+        return response
 
 @app.on_event("startup")
 def startup():
@@ -152,6 +153,22 @@ def startup():
                 .first()
             )
             last_touch = newest_row.updated_at if newest_row and newest_row.updated_at else (run.started_at or run.updated_at or run.created_at)
+            if (
+                run.status == "running"
+                and newest_row
+                and newest_row.status == "pending"
+                and newest_row.started_at is None
+                and last_touch
+                and last_touch <= stale_cutoff
+            ):
+                stale_runs.append(run)
+                run.status = "failed"
+                run.finished_at = run.finished_at or now
+                for row in session.query(TaskResult).filter(TaskResult.run_id == run.run_id, TaskResult.status.in_(["pending", "running"])).all():
+                    row.status = "failed"
+                    row.error = row.error or "服务重启前任务尚未开始执行，请重新发起运行"
+                    row.finished_at = row.finished_at or now
+                continue
             if last_touch and last_touch > stale_cutoff:
                 continue
             stale_runs.append(run)

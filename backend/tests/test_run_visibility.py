@@ -203,6 +203,45 @@ def test_create_run_materializes_pending_task_list_before_background_execution(m
     assert [row["status"] for row in detail["results"]] == ["pending", "pending"]
 
 
+def test_run_many_marks_materialized_pending_rows_failed_when_background_runner_crashes(monkeypatch):
+    import asyncio
+
+    from backend.app.api.runs import _run_many
+    from backend.app.schemas import RunRequest
+
+    async def crash_before_task_start(*args, **kwargs):
+        raise RuntimeError("decrypt failed")
+
+    monkeypatch.setattr("backend.app.api.runs.run_model_tasks", crash_before_task_start)
+    with SessionLocal() as session:
+        provider = Provider(name="crash-provider", api_base="http://127.0.0.1:9999/v1", encrypted_api_key=encrypt_secret("test-secret"), api_key_fingerprint=fingerprint_secret("test-secret"))
+        session.add(provider)
+        session.flush()
+        model = LLMModel(provider_id=provider.id, display_name="Crash Model", model_id="crash-model")
+        session.add(model)
+        task = Task(slug="crash-task", title="Crash Task", category="core", dimension="accuracy", prompt="A", evaluator_type="contains", evaluator_config_json='{"contains":"A"}', content_hash="hash-crash")
+        session.add(task)
+        session.flush()
+        run = BenchmarkRun(run_id="crash-run", model_id=model.id, suite_slug="all", status="pending")
+        session.add(run)
+        session.flush()
+        session.add(TaskResult(run_id=run.run_id, model_id=model.id, task_id=task.id, task_hash=task.content_hash, prompt=task.prompt, status="pending"))
+        session.commit()
+        model_id = model.id
+
+    asyncio.run(_run_many(RunRequest(model_ids=[model_id], task_slugs=["crash-task"], max_concurrency=1), ["crash-run"]))
+
+    with SessionLocal() as session:
+        run = session.query(BenchmarkRun).filter_by(run_id="crash-run").one()
+        result = session.query(TaskResult).filter_by(run_id="crash-run").one()
+
+    assert run.status == "failed"
+    assert run.finished_at
+    assert result.status == "failed"
+    assert result.finished_at
+    assert "decrypt failed" in result.error
+
+
 def test_cancel_run_marks_pending_and_running_results_cancelled():
     run_id = _seed_run_with_results()
     with SessionLocal() as session:
@@ -623,7 +662,7 @@ def test_create_run_rejects_empty_model_selection():
     assert response.status_code == 422
 
 
-def test_run_many_starts_selected_models_concurrently(monkeypatch):
+def test_run_many_limits_selected_model_concurrency(monkeypatch):
     import asyncio
 
     from backend.app.api.runs import _run_many
@@ -642,6 +681,14 @@ def test_run_many_starts_selected_models_concurrently(monkeypatch):
     monkeypatch.setattr("backend.app.api.runs.run_model_tasks", fake_run_model_tasks)
 
     payload = RunRequest(model_ids=[101, 202], task_slugs=["parallel-model-task"], max_concurrency=1)
+    asyncio.run(_run_many(payload, run_ids=["run-a", "run-b"]))
+
+    assert active["max"] == 1
+    assert set(seen_models) == {101, 202}
+
+    active.update({"count": 0, "max": 0})
+    seen_models.clear()
+    payload = RunRequest(model_ids=[101, 202], task_slugs=["parallel-model-task"], max_concurrency=2)
     asyncio.run(_run_many(payload, run_ids=["run-a", "run-b"]))
 
     assert active["max"] == 2

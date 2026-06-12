@@ -37,7 +37,7 @@ export function dimensionLabel(dimension:string){
 }
 
 export function statusLabel(status:string){
-  const labels:Record<string,string>={success:'成功',failed:'失败',pending:'待运行',running:'运行中',cancelled:'已终止'};
+  const labels:Record<string,string>={success:'成功',failed:'失败',pending:'待运行',queued:'等待中',waiting:'等待中',running:'运行中',cancelled:'已终止'};
   return labels[status]||status||'未知';
 }
 export function scoreText(score:number|null){

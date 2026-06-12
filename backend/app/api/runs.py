@@ -89,24 +89,44 @@ def _materialize_run(session: Session, model_id: int, payload: RunRequest) -> Be
     return run
 
 
+def _mark_run_failed(session: Session, run_id: str | None, error: str):
+    if not run_id:
+        return
+    now = datetime.utcnow()
+    run = session.query(BenchmarkRun).filter(BenchmarkRun.run_id == run_id).first()
+    if run and run.status not in {"completed", "failed", "cancelled"}:
+        run.status = "failed"
+        run.finished_at = run.finished_at or now
+    for row in session.query(TaskResult).filter(TaskResult.run_id == run_id, TaskResult.status.in_(["pending", "running"])).all():
+        row.status = "failed"
+        row.error = row.error or error
+        row.finished_at = row.finished_at or now
+    session.commit()
+
+
 async def _run_many(payload: RunRequest, run_ids: list[str] | None = None):
+    model_semaphore = asyncio.Semaphore(max(1, payload.max_concurrency))
+
     async def _one(index: int, mid: int):
-        session = SessionLocal()
-        try:
-            run_id = run_ids[index] if run_ids and index < len(run_ids) else None
-            await run_model_tasks(
-                session,
-                mid,
-                payload.task_slugs,
-                payload.judge_profile_id,
-                payload.suite,
-                run_id=run_id,
-                max_concurrency=payload.max_concurrency,
-                max_retries=payload.max_retries,
-                force_rerun=payload.force_rerun,
-            )
-        finally:
-            session.close()
+        run_id = run_ids[index] if run_ids and index < len(run_ids) else None
+        async with model_semaphore:
+            session = SessionLocal()
+            try:
+                await run_model_tasks(
+                    session,
+                    mid,
+                    payload.task_slugs,
+                    payload.judge_profile_id,
+                    payload.suite,
+                    run_id=run_id,
+                    max_concurrency=1,
+                    max_retries=payload.max_retries,
+                    force_rerun=payload.force_rerun,
+                )
+            except Exception as exc:
+                _mark_run_failed(session, run_id, f"后台任务异常：{exc}")
+            finally:
+                session.close()
 
     await asyncio.gather(*[_one(index, mid) for index, mid in enumerate(payload.model_ids)])
 
