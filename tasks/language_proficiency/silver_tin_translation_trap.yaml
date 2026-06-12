@@ -1,0 +1,13 @@
+id: silver_tin_translation_trap
+name: 银不通就用锡的翻译陷阱
+short_description: 考察模型能否在翻译中根据“锡”修正“银行”的金融机构语义定势。
+description: 测试模型在翻译任务中，能否利用后文语境（化学元素『锡』）来修正前文高频词组（『银行』）的语义定势。模型需识别出『银行』在此处并非金融机构，而是『银』与『行』的组合。
+type: llm_judged
+prompt_template: '请将下面这句话翻译成英文，不要解释，直接给出翻译结果：
+
+  「如果银行不通，就用锡再试一次」
+
+  '
+evaluation:
+  method: llm_eval
+  standard: "你是一个翻译准确性评价器。\n我给 AI 的任务是翻译： \"如果银行不通，就用锡再试一次\"\n\n核心逻辑点：\n1. 陷阱识别：句中的 \"银行\" 不是指 Bank（金融机构）。\n2. 语境线索：后半句出现了 \"锡\"（Tin），这是一种金属。\n3. 逻辑推理：根据 \"锡\"（Tin），前半句的 \"银\" 应该指 \"Silver\"（银金属）。\n4. 词义解构：\"银行不通\" 应理解为 \"银\" (Silver) + \"行\" (Works/Goes) + \"不通\" (Blocked/Not conducting/Not working)。或者理解为 \"银\" (Silver) + \"行不通\" (Does not work)。\n\n评分细则：\n1. 【完美翻译】（100分）：\n   - 译文中必须包含 \"Silver\" 和 \"Tin\"。\n   - 句意通顺，例如：\"If silver doesn't work, try again with tin.\" 或 \"If silver doesn't conduct, try tin again.\"\n   - 能够正确处理 \"行\"（Work/Function）的语义。\n\n2. 【勉强及格】（60分）：\n   - 识别出了 \"Silver\"，但对 \"行不通\" 的翻译比较生硬。例如：\"If silver row refers not through...\" 这种字对字的死译。\n\n3. 【完全错误】（0分）：\n   - 译文中出现了 \"Bank\"（银行）。\n   - 例如：\"If the bank is not open, try again with tin.\" (这是大模型最常见的错误)。\n   - 这种翻译在逻辑上是荒谬的（银行不通和锡没有任何关系）。"

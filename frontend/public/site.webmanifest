@@ -1,0 +1,12 @@
+{
+  "name": "Senyao's LLM Benchmark",
+  "short_name": "LLM Benchmark",
+  "description": "SenyaoLab 自制大模型评测与运行审计系统",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fffdf6",
+  "theme_color": "#d8b65b",
+  "icons": [
+    {"src": "/benchmark-logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+  ]
+}
